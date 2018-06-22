@@ -67,7 +67,7 @@ def run_on_simulator(circuit, reps):
 
 
 def run_on_engine(circuit, reps):
-    qubits = sorted(list(circuit.qubits()), key=str)
+    qubits = sorted(list(circuit.all_qubits()), key=str)
     new_qubits = {q: cirq.google.XmonQubit(0, i) for i, q in enumerate(qubits)}
     remapped_circuit = cirq.Circuit.from_ops(
         cirq.Operation(
@@ -81,20 +81,7 @@ def run_on_engine(circuit, reps):
     return engine.run(remapped_circuit, repetitions=reps)
 
 
-def check_block_code(k, bad_t_gates, reps):
-    if k & 1:
-        raise ValueError('Not supported: odd k.')
-
-    q1 = cirq.NamedQubit('$1')
-    q2 = cirq.NamedQubit('$2')
-    groups = [
-        [
-            cirq.NamedQubit(chr(97 + j) + str(i))
-            for i in range(1, 5)
-        ]
-        for j in range(k + 2)
-    ]
-
+def make_circuit(q1, q2, groups, k, bad_t_gates) -> cirq.Circuit:
     t_id = 0
 
     def next_noisy_t(q, inverse=False):
@@ -110,7 +97,7 @@ def check_block_code(k, bad_t_gates, reps):
                                   for i in range(len(groups))
                                   for t in groups[i][0 if i < 2 else 1:]]
 
-    circuit = cirq.Circuit.from_ops(
+    return cirq.Circuit.from_ops(
         # Initial H layer.
         cirq.H(q1),
         cirq.H(q2),
@@ -135,14 +122,43 @@ def check_block_code(k, bad_t_gates, reps):
 
         # Measure layer.
         cirq.H.on_each(measured_qubits),
-        cirq.measure_each(measured_qubits),
+        cirq.measure_each(*measured_qubits),
 
         # Testing layer. Measures outputs in the T vs TZ basis.
         cirq.T.inverse().on_each(output_qubits),
         cirq.H.on_each(output_qubits),
-        cirq.measure_each(output_qubits)
+        cirq.measure_each(*output_qubits)
     )
-    # print(circuit)
+
+
+def optimize_circuit(circuit: cirq.Circuit) -> cirq.Circuit:
+    c = cirq.Circuit(circuit)
+    for opt in [cirq.google.ConvertToXmonGates(),
+                cirq.google.MergeInteractions(),
+                cirq.google.MergeRotations(),
+                cirq.google.EjectZ(),
+                cirq.DropNegligible(),
+                cirq.DropEmptyMoments()]:
+        opt.optimize_circuit(c)
+    return c
+
+
+def check_block_code(k, bad_t_gates, reps):
+    if k & 1:
+        raise ValueError('Not supported: odd k.')
+
+    q1 = cirq.NamedQubit('$1')
+    q2 = cirq.NamedQubit('$2')
+    groups = [
+        [
+            cirq.NamedQubit(chr(97 + j) + str(i))
+            for i in range(1, 5)
+        ]
+        for j in range(k + 2)
+    ]
+
+    circuit = make_circuit(q1, q2, groups, k, bad_t_gates)
+    circuit = optimize_circuit(circuit)
 
     # Simulate
     results = run_on_engine(circuit, reps)

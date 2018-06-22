@@ -551,24 +551,24 @@ def test_qubits():
         Moment([ops.X(a)]),
         Moment([ops.X(b)]),
     ])
-    assert c.qubits() == {a, b}
+    assert c.all_qubits() == {a, b}
 
     c = Circuit([
         Moment([ops.X(a)]),
         Moment([ops.X(a)]),
     ])
-    assert c.qubits() == {a}
+    assert c.all_qubits() == {a}
 
     c = Circuit([
         Moment([ops.CZ(a, b)]),
     ])
-    assert c.qubits() == {a, b}
+    assert c.all_qubits() == {a, b}
 
     c = Circuit([
         Moment([ops.CZ(a, b)]),
         Moment([ops.X(a)])
     ])
-    assert c.qubits() == {a, b}
+    assert c.all_qubits() == {a, b}
 
 
 def test_from_ops():

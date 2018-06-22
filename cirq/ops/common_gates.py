@@ -14,17 +14,18 @@
 
 """Quantum gates that are commonly used in the literature."""
 import math
-from typing import Union, Tuple, Optional, List, Iterable, Callable
+from typing import Union, Tuple, Optional, List, Callable
 
 import numpy as np
 
-from cirq.ops import gate_features, eigen_gate, raw_types
+from cirq.ops import gate_features, eigen_gate, raw_types, matrix_gates
 from cirq.value import Symbol
 
 
 class Rot11Gate(eigen_gate.EigenGate,
                 gate_features.TwoQubitGate,
                 gate_features.TextDiagrammableGate,
+                gate_features.PhaseableGate,
                 raw_types.InterchangeableQubitsGate):
     """Phases the |11> state of two adjacent qubits by a fixed amount.
 
@@ -42,6 +43,9 @@ class Rot11Gate(eigen_gate.EigenGate,
             (0, np.diag([1, 1, 1, 0])),
             (1, np.diag([0, 0, 0, 1])),
         ]
+
+    def phase_by(self, phase_turns, qubit_index):
+        return self
 
     def _canonical_exponent_period(self) -> Optional[float]:
         return 2
@@ -259,13 +263,18 @@ class MeasurementGate(gate_features.TextDiagrammableGate):
         return hash((MeasurementGate, self.key, self.invert_mask))
 
 
-def measure(*qubits, key=None, invert_mask=None) -> raw_types.Operation:
+def measure(*qubits: raw_types.QubitId,
+            key: Optional[str] = None,
+            invert_mask: Optional[Tuple[bool, ...]] = None
+            ) -> raw_types.Operation:
     """Returns a single MeasurementGate applied to all the given qubits.
+
+    The qubits are measured in the computational basis.
 
     Args:
         *qubits: The qubits that the measurement gate should measure.
         key: The string key of the measurement. If this is None, it defaults
-            to a comma-separated list of the target qubits' names.
+            to a comma-separated list of the target qubits' str values.
         invert_mask: A list of Truthy or Falsey values indicating whether
             the corresponding qubits should be flipped. None indicates no
             inverting should be done.
@@ -278,19 +287,20 @@ def measure(*qubits, key=None, invert_mask=None) -> raw_types.Operation:
     return MeasurementGate(key, invert_mask).on(*qubits)
 
 
-def measure_each(qubits: Iterable[raw_types.QubitId],
-                 key_func: Callable[[raw_types.QubitId], str]=str
+def measure_each(*qubits: raw_types.QubitId,
+                 key_func: Callable[[raw_types.QubitId], str] = str
                  ) -> List[raw_types.Operation]:
     """Returns a list of operations individually measuring the given qubits.
 
+    The qubits are measured in the computational basis.
+
     Args:
-        qubits: The qubits to measure.
+        *qubits: The qubits to measure.
         key_func: Determines the key of the measurements of each qubit. Takes
             the qubit and returns the key for that qubit. Defaults to str.
 
     Returns:
         A list of operations individually measuring the given qubits.
-
     """
     return [MeasurementGate(key_func(q)).on(q) for q in qubits]
 
