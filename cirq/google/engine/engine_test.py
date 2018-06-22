@@ -13,6 +13,7 @@
 # limitations under the License.
 
 """Tests for engine."""
+import re
 
 import numpy as np
 import pytest
@@ -20,6 +21,7 @@ import pytest
 from apiclient import discovery
 from google.protobuf.json_format import MessageToDict
 
+import cirq
 from cirq import Circuit, H, moment_by_moment_schedule, NamedQubit, \
     ParamResolver, Points, Schedule, ScheduledOperation, UnconstrainedDevice
 from cirq.api.google.v1 import operations_pb2, params_pb2, program_pb2
@@ -110,19 +112,18 @@ def test_schedule_and_device_both_not_supported(build):
     scheduled_op = ScheduledOperation(time=None, duration=None,
                                       operation=H.on(NamedQubit("dorothy")))
     schedule = Schedule(device=Foxtail, scheduled_operations=[scheduled_op])
-    with pytest.raises(TypeError, match='Device'):
-        Engine(api_key="key").run(schedule,
-                                  JobConfig('project-id'),
-                                  device=Foxtail)
+    eng = Engine(api_key="key")
+    with pytest.raises(ValueError, match='Device'):
+        eng.run(schedule, JobConfig('project-id'), device=Foxtail)
 
 
 @mock.patch.object(discovery, 'build')
 def test_unsupported_program_type(build):
+    eng = Engine(api_key="key")
     with pytest.raises(TypeError, match='program'):
-        Engine(api_key="key").run(
-            program=12,
-            job_config=JobConfig('project-id'),
-            device=Foxtail)
+        eng.run(program="this isn't even the right type of thing!",
+                job_config=JobConfig('project-id'),
+                device=Foxtail)
 
 
 @mock.patch.object(discovery, 'build')
@@ -267,12 +268,12 @@ def test_run_sweep_sweeps(build):
 
 @mock.patch.object(discovery, 'build')
 def test_bad_priority(build):
-    with pytest.raises(TypeError, match='priority must be between 0 and 1000'):
-        Engine(api_key="key").run(
-            Circuit(),
-            JobConfig('project-id', gcs_prefix='gs://bucket/folder'),
-            UnconstrainedDevice,
-            priority=1001)
+    eng = Engine(api_key="key")
+    with pytest.raises(ValueError, match='priority must be'):
+        eng.run(Circuit(),
+                JobConfig('project-id', gcs_prefix='gs://bucket/folder'),
+                UnconstrainedDevice,
+                priority=1001)
 
 
 @mock.patch.object(discovery, 'build')
@@ -341,7 +342,7 @@ def test_job_labels(build):
     engine = Engine(api_key="key")
 
     def body():
-      return jobs.patch.call_args[1]['body']
+        return jobs.patch.call_args[1]['body']
 
     jobs.get().execute.return_value = {'labels': {'a': '1', 'b': '1'}}
     engine.add_job_labels(job_name, {'a': '2', 'c': '1'})
@@ -361,3 +362,125 @@ def test_job_labels(build):
     assert body()['labels'] == {'b': '1'}
     assert body()['labelFingerprint'] == 'abcdef'
 
+
+@mock.patch.object(discovery, 'build')
+def test_implied_job_config_project_id(build):
+    eng = Engine(api_key="key")
+    with pytest.raises(ValueError, match='project id'):
+        _ = eng.implied_job_config(None)
+    with pytest.raises(ValueError, match='project id'):
+        _ = eng.implied_job_config(JobConfig())
+    assert eng.implied_job_config(
+        JobConfig(project_id='specific')).project_id == 'specific'
+
+    eng_with = Engine(api_key="key", default_project_id='default')
+
+    # Fallback to default.
+    assert eng_with.implied_job_config(None).project_id == 'default'
+
+    # Override default.
+    assert eng_with.implied_job_config(
+        JobConfig(project_id='specific')).project_id == 'specific'
+
+
+@mock.patch.object(discovery, 'build')
+def test_implied_job_config_gcs_prefix(build):
+    eng = Engine(api_key="key")
+    config = JobConfig(project_id='project_id')
+
+    # Implied by project id.
+    assert eng.implied_job_config(config).gcs_prefix == 'gs://gqe-project_id/'
+
+    # Bad default.
+    eng_with_bad = Engine(api_key="key", default_gcs_prefix='bad_prefix')
+    with pytest.raises(ValueError, match='gcs_prefix must be of the form'):
+        _ = eng_with_bad.implied_job_config(config)
+
+    # Good default without slash.
+    eng_with = Engine(api_key="key", default_gcs_prefix='gs://good')
+    assert eng_with.implied_job_config(config).gcs_prefix == 'gs://good/'
+
+    # Good default with slash.
+    eng_with = Engine(api_key="key", default_gcs_prefix='gs://good/')
+    assert eng_with.implied_job_config(config).gcs_prefix == 'gs://good/'
+
+    # Bad override.
+    config.gcs_prefix = 'bad_prefix'
+    with pytest.raises(ValueError, match='gcs_prefix must be of the form'):
+        _ = eng.implied_job_config(config)
+    with pytest.raises(ValueError, match='gcs_prefix must be of the form'):
+        _ = eng_with_bad.implied_job_config(config)
+
+    # Good override without slash.
+    config.gcs_prefix = 'gs://better'
+    assert eng.implied_job_config(config).gcs_prefix == 'gs://better/'
+    assert eng_with.implied_job_config(config).gcs_prefix == 'gs://better/'
+
+    # Good override with slash.
+    config.gcs_prefix = 'gs://better/'
+    assert eng.implied_job_config(config).gcs_prefix == 'gs://better/'
+    assert eng_with.implied_job_config(config).gcs_prefix == 'gs://better/'
+
+
+@cirq.testing.only_test_in_python3  # uses re.fullmatch
+@mock.patch.object(discovery, 'build')
+def test_implied_job_config(build):
+    eng = Engine(api_key="key")
+
+    # Infer all from project id.
+    implied = eng.implied_job_config(JobConfig(project_id='project_id'))
+    assert implied.project_id == 'project_id'
+    assert re.fullmatch(r'prog-[0-9A-Z]+', implied.program_id)
+    assert implied.job_id == 'job-0'
+    assert implied.gcs_prefix == 'gs://gqe-project_id/'
+    assert re.fullmatch(
+        r'gs://gqe-project_id/programs/prog-[0-9A-Z]+/prog-[0-9A-Z]+',
+        implied.gcs_program)
+    assert re.fullmatch(
+        r'gs://gqe-project_id/programs/prog-[0-9A-Z]+/jobs/job-0',
+        implied.gcs_results)
+
+    # Force program id.
+    implied = eng.implied_job_config(JobConfig(
+        project_id='j',
+        program_id='g'))
+    assert implied.project_id == 'j'
+    assert implied.program_id == 'g'
+    assert implied.job_id == 'job-0'
+    assert implied.gcs_prefix == 'gs://gqe-j/'
+    assert implied.gcs_program == 'gs://gqe-j/programs/g/g'
+    assert implied.gcs_results == 'gs://gqe-j/programs/g/jobs/job-0'
+
+    # Force all.
+    implied = eng.implied_job_config(JobConfig(
+        project_id='a',
+        program_id='b',
+        job_id='c',
+        gcs_prefix='gs://d',
+        gcs_program='e',
+        gcs_results='f'))
+    assert implied.project_id == 'a'
+    assert implied.program_id == 'b'
+    assert implied.job_id == 'c'
+    assert implied.gcs_prefix == 'gs://d/'
+    assert implied.gcs_program == 'e'
+    assert implied.gcs_results == 'f'
+
+
+@mock.patch.object(discovery, 'build')
+def test_bad_job_config_inference_order(build):
+    eng = Engine(api_key="key")
+    config = JobConfig()
+
+    with pytest.raises(ValueError):
+        eng._infer_gcs_prefix(config)
+    config.project_id = 'project'
+
+    with pytest.raises(ValueError):
+        eng._infer_gcs_results(config)
+    with pytest.raises(ValueError):
+        eng._infer_gcs_program(config)
+    eng._infer_gcs_prefix(config)
+
+    eng._infer_gcs_results(config)
+    eng._infer_gcs_program(config)
