@@ -68,7 +68,8 @@ def test_run_circuit(build):
         'result': MessageToDict(_A_RESULT)}
 
     result = Engine(api_key="key").run(
-        JobConfig('project-id', gcs_prefix='gs://bucket/folder'), Circuit(),
+        Circuit(),
+        JobConfig('project-id', gcs_prefix='gs://bucket/folder'),
         UnconstrainedDevice)
     assert result.repetitions == 1
     assert result.params.param_dict == {'a': 1}
@@ -89,7 +90,8 @@ def test_circuit_device_validation_fails(build):
     circuit = Circuit.from_ops(H.on(NamedQubit("dorothy")))
     with pytest.raises(ValueError):
         Engine(api_key="key").run(
-            JobConfig('project-id', gcs_prefix='gs://bucket/folder'), circuit,
+            circuit,
+            JobConfig('project-id', gcs_prefix='gs://bucket/folder'),
             Foxtail)
 
 
@@ -100,7 +102,7 @@ def test_schedule_device_validation_fails(build):
     schedule = Schedule(device=Foxtail, scheduled_operations=[scheduled_op])
 
     with pytest.raises(ValueError):
-        Engine(api_key="key").run(JobConfig('project-id'), schedule)
+        Engine(api_key="key").run(schedule, JobConfig('project-id'))
 
 
 @mock.patch.object(discovery, 'build')
@@ -109,7 +111,8 @@ def test_schedule_and_device_both_not_supported(build):
                                       operation=H.on(NamedQubit("dorothy")))
     schedule = Schedule(device=Foxtail, scheduled_operations=[scheduled_op])
     with pytest.raises(TypeError, match='Device'):
-        Engine(api_key="key").run(JobConfig('project-id'), schedule,
+        Engine(api_key="key").run(schedule,
+                                  JobConfig('project-id'),
                                   device=Foxtail)
 
 
@@ -117,7 +120,9 @@ def test_schedule_and_device_both_not_supported(build):
 def test_unsupported_program_type(build):
     with pytest.raises(TypeError, match='program'):
         Engine(api_key="key").run(
-            JobConfig('project-id'), program=12, device=Foxtail)
+            program=12,
+            job_config=JobConfig('project-id'),
+            device=Foxtail)
 
 
 @mock.patch.object(discovery, 'build')
@@ -137,8 +142,8 @@ def test_run_circuit_failed(build):
 
     with pytest.raises(RuntimeError, match='It is in state FAILURE'):
         Engine(api_key="key").run(
-            JobConfig('project-id', gcs_prefix='gs://bucket/folder'),
             Circuit(),
+            JobConfig('project-id', gcs_prefix='gs://bucket/folder'),
             UnconstrainedDevice)
 
 
@@ -160,7 +165,8 @@ def test_default_prefix(build):
         'result': MessageToDict(_A_RESULT)}
 
     result = Engine(api_key="key").run(
-        JobConfig('org.com:project-id'), Circuit(),
+        Circuit(),
+        JobConfig('org.com:project-id'),
         UnconstrainedDevice)
     assert result.repetitions == 1
     assert result.params.param_dict == {'a': 1}
@@ -190,8 +196,8 @@ def test_run_sweep_params(build):
         'result': MessageToDict(_RESULTS)}
 
     job = Engine(api_key="key").run_sweep(
-        JobConfig('project-id', gcs_prefix='gs://bucket/folder'),
         moment_by_moment_schedule(UnconstrainedDevice, Circuit()),
+        JobConfig('project-id', gcs_prefix='gs://bucket/folder'),
         params=[ParamResolver({'a': 1}), ParamResolver({'a': 2})])
     results = job.results()
     assert len(results) == 2
@@ -234,8 +240,8 @@ def test_run_sweep_sweeps(build):
         'result': MessageToDict(_RESULTS)}
 
     job = Engine(api_key="key").run_sweep(
-        JobConfig('project-id', gcs_prefix='gs://bucket/folder'),
         moment_by_moment_schedule(UnconstrainedDevice, Circuit()),
+        JobConfig('project-id', gcs_prefix='gs://bucket/folder'),
         params=Points('a', [1, 2]))
     results = job.results()
     assert len(results) == 2
@@ -263,8 +269,8 @@ def test_run_sweep_sweeps(build):
 def test_bad_priority(build):
     with pytest.raises(TypeError, match='priority must be between 0 and 1000'):
         Engine(api_key="key").run(
-            JobConfig('project-id', gcs_prefix='gs://bucket/folder'),
             Circuit(),
+            JobConfig('project-id', gcs_prefix='gs://bucket/folder'),
             UnconstrainedDevice,
             priority=1001)
 
@@ -285,8 +291,9 @@ def test_cancel(build):
         'executionStatus': {'state': 'CANCELLED'}}
 
     job = Engine(api_key="key").run_sweep(
+        Circuit(),
         JobConfig('project-id', gcs_prefix='gs://bucket/folder'),
-        Circuit(), device=UnconstrainedDevice)
+        device=UnconstrainedDevice)
     job.cancel()
     assert job.job_resource_name == ('projects/project-id/programs/test/'
                                      'jobs/test')

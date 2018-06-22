@@ -253,7 +253,9 @@ def test_repr():
     assert repr(cirq.X**0.5) == 'X**0.5'
 
     assert repr(cirq.Z) == 'Z'
-    assert repr(cirq.Z**0.5) == 'Z**0.5'
+    assert repr(cirq.Z**0.125) == 'Z**0.125'
+    assert repr(cirq.Z**0.5) == 'S'
+    assert repr(cirq.Z**0.25) == 'T'
 
     assert repr(cirq.Y) == 'Y'
     assert repr(cirq.Y**0.5) == 'Y**0.5'
@@ -267,7 +269,9 @@ def test_str():
     assert str(cirq.X**0.5) == 'X**0.5'
 
     assert str(cirq.Z) == 'Z'
-    assert str(cirq.Z**0.5) == 'Z**0.5'
+    assert str(cirq.Z**0.125) == 'Z**0.125'
+    assert str(cirq.Z**0.5) == 'S'
+    assert str(cirq.Z**0.25) == 'T'
 
     assert str(cirq.Y) == 'Y'
     assert str(cirq.Y**0.5) == 'Y**0.5'

@@ -232,9 +232,17 @@ def test_text_diagrammable():
     assert CY.text_diagram_wire_symbols() == ('@', 'Y')
     assert CY.text_diagram_exponent() == 1
 
-    assert cirq.ControlledGate(cirq.S).text_diagram_wire_symbols() == (
+    assert cirq.ControlledGate(cirq.T**0.5).text_diagram_wire_symbols() == (
         '@', 'Z')
-    assert cirq.ControlledGate(cirq.S).text_diagram_exponent() == 0.5
+    assert cirq.ControlledGate(cirq.T**0.5).text_diagram_exponent() == 0.125
+
+    assert cirq.ControlledGate(cirq.T).text_diagram_wire_symbols() == (
+        '@', 'T')
+    assert cirq.ControlledGate(cirq.T).text_diagram_exponent() == 1
+
+    assert cirq.ControlledGate(cirq.S).text_diagram_wire_symbols() == (
+        '@', 'S')
+    assert cirq.ControlledGate(cirq.S).text_diagram_exponent() == 1
 
 
 def test_text_diagrammable_via_extension():

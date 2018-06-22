@@ -18,7 +18,7 @@ from typing import Union, Tuple, Optional, List, Callable
 
 import numpy as np
 
-from cirq.ops import gate_features, eigen_gate, raw_types, matrix_gates
+from cirq.ops import gate_features, eigen_gate, raw_types
 from cirq.value import Symbol
 
 
@@ -188,9 +188,9 @@ class RotZGate(eigen_gate.EigenGate,
                                   use_unicode_characters=True,
                                   precision=3):
         if abs(self.half_turns) == 0.5:
-            return 'S'
+            return 'S',
         if abs(self.half_turns) == 0.25:
-            return 'T'
+            return 'T',
         return 'Z',
 
     def text_diagram_exponent(self) -> float:
@@ -202,7 +202,13 @@ class RotZGate(eigen_gate.EigenGate,
         if self.half_turns == 1:
             return 'Z'
         if self.half_turns == 0.5:
-            return 'Z'
+            return 'S'
+        if self.half_turns == -0.5:
+            return 'S**-1'
+        if self.half_turns == 0.25:
+            return 'T'
+        if self.half_turns == -0.25:
+            return 'T**-1'
         return 'Z**{!r}'.format(self.half_turns)
 
 
@@ -220,7 +226,7 @@ class MeasurementGate(gate_features.TextDiagrammableGate):
     """
 
     def __init__(self,
-                 key: Optional[str],
+                 key: Optional[str] = '',
                  invert_mask: Optional[Tuple[bool, ...]] = None) -> None:
         self.key = key
         self.invert_mask = invert_mask
