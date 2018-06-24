@@ -23,7 +23,6 @@ from cirq.value import Symbol
 
 
 class Rot11Gate(eigen_gate.EigenGate,
-                gate_features.PhaseableGate,
                 gate_features.TwoQubitGate,
                 gate_features.TextDiagrammableGate,
                 gate_features.PhaseableGate,
