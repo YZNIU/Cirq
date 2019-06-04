@@ -60,6 +60,7 @@ class CCZPowGate(eigen_gate.EigenGate,
             'ZIZ': global_phase * -c,
             'IZZ': global_phase * -c,
             'ZZZ': global_phase * c,
+
         })
 
     def _decompose_(self, qubits):
@@ -178,6 +179,9 @@ class CCXPowGate(eigen_gate.EigenGate,
             'IZX': global_phase * -c,
             'ZZX': global_phase * c,
         })
+
+
+
 
     def qubit_index_to_equivalence_group_key(self, index):
         return index < 2
